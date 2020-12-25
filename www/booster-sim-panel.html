@@ -2,11 +2,39 @@
     <head>
     </head>
     <body>
-        <span id="test_span1">hi</span>
+        <h3>Simulation Panel</h3>
+        <hr/>
+        <label for="total_doses_input">Number of simulations to run:</label>
+        <input type="number" id="num_sims_input" style="width: 7em;" value="100" />
+        <hr/>
+        <b>Clinic info</b>
         <br/>
-        <input type="button" value="Go!" onclick="run_simulations(1);" />
+        <label for="total_doses_input">Total doses:</label>
+        <input type="number" id="total_doses_input" style="width: 7em;" value="50" />
         <br/>
-        <span id="summary_span">hi</span>
+        <label for="doses_per_day_input">Doses per day:</label>
+        <input type="number" id="doses_per_day_input" style="width: 4em;" value="6" />
+        <hr/>
+        <b>Sim settings</b>
+        <br/>
+        <label for="bump_price_input">Bump cost: $</label>
+        <input type="number" id="bump_price_input" style="width: 6em;" min="0.00" step="0.50" max="500.00" value="2.00" onchange="enforce_currency_number(this);" />
+        <br/>
+        <input type="radio" name="queue_method" id="check_slide_input" checked="" />
+        <label for="check_slide_input">Slide</label>
+        <input type="radio" name="queue_method" id="check_slide_share_input" />
+        <label for="check_slide_share_input">Slide Share</label>
+        <input type="radio" name="queue_method" id="check_swap_input" />
+        <label for="check_swap_input">Swap</label>
+        <br/>
+        <br/>
+        <hr/>
+        <input type="button" value="Go!" onclick="run_simulations();" />
+        <span id="brag_box"></span>
+        <hr/>
+        <b>Details from most recent simulation:</b>
+        <br/>
+        <span id="summary_span"></span>
         <br/>
         <script src="./booster-sim-panel.js"></script>
     </body>
