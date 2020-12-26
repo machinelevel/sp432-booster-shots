@@ -10,9 +10,16 @@
 
 var most_recent_cohort = null;
 
+var QUEUE_SHIFT       = 0;
+var QUEUE_SHIFT_SHARE = 1;
+var QUEUE_SWAP        = 2;
+
 function Person(original_slot)
 {
     this.original_slot = original_slot;
+    this.current_slot = original_slot;
+    this.amount_spent = 0;
+    this.amount_received = 0;
 
     this.set_identity = function()
     {
@@ -25,14 +32,36 @@ function Person(original_slot)
 
     this.take_survey = function()
     {
-        this.want_vaccine_early = 0.5; // 1.0 = "want it ASAP" and -1.0 = "never want it."
+        this.i_want_the_vaccine_sooner = Math.random(); // 1.0 = "want it ASAP" and 0.0 = "don't care when."
+        this.i_want_extra_money = Math.random(); // 1.0 = "I'm dangerously broke" and 0.0 = "I'm fine for money."
+
+        this.ok_to_bump = false;
+        if (this.i_want_extra_money > this.i_want_the_vaccine_sooner)
+            if (this.i_want_extra_money > 0.25) // check the "bump me" box
+                this.ok_to_bump = true;
     }
 
     this.make_a_choice = function(cohort)
     {
-        var i_want_to_be_bumped_back = 0.0;
-        var percent_of_my_savings_im_willing_to_spend = 1;
-        var amount_im_willing_to_spend = this.total_available_cash_savings * 0.01 * percent_of_my_savings_im_willing_to_spend;
+        if (this.i_want_the_vaccine_sooner > this.i_want_extra_money && !this.ok_to_bump)
+        {
+            // shop for a bump-ahead
+            var min_days_to_jump = 2;
+            var percent_of_my_savings_im_willing_to_spend = 20 * this.i_want_the_vaccine_sooner;
+            var amount_im_willing_to_spend = this.total_available_cash_savings * 0.01 * percent_of_my_savings_im_willing_to_spend;
+            amount_im_willing_to_spend -= this.amount_spent;
+            var max_slots_i_can_jump = Math.floor(amount_im_willing_to_spend / cohort.bump_price);
+            if (max_slots_i_can_jump > this.current_slot)
+                max_slots_i_can_jump = this.current_slot;
+            var start_slot = this.current_slot - max_slots_i_can_jump;
+            for (var slot = start_slot; slot < this.current_slot; ++slot)
+            {
+                var other = cohort.people[cohort.appointment_slots[slot]];
+                if ((cohort.slot_day_indices[this.current_slot] - cohort.slot_day_indices[slot]) >= min_days_to_jump)
+                    if (cohort.try_to_jump(this, other))
+                        break;
+            }
+        }
     }
 
     this.set_identity();
@@ -48,6 +77,7 @@ function Cohort(number_of_doses, doses_per_day, bump_price, bump_method)
     this.first_dose_date = days_after_today(30);
     this.people = []
     this.appointment_slots = []
+    this.slot_day_indices = []
     this.slot_dates = []
     for (var slot = 0; slot < this.number_of_doses; ++slot)
     {
@@ -57,6 +87,7 @@ function Cohort(number_of_doses, doses_per_day, bump_price, bump_method)
         var slot_day_index = Math.floor(slot / this.doses_per_day);
         var slot_date = date = new Date(this.first_dose_date);
         slot_date.setDate(slot_date.getDate() + slot_day_index);
+        this.slot_day_indices.push(slot_day_index);
         this.slot_dates.push(slot_date);
     }
 
@@ -67,6 +98,77 @@ function Cohort(number_of_doses, doses_per_day, bump_price, bump_method)
             this.people[shuffle[i]].make_a_choice(this);
     }
 
+    this.try_to_jump = function(jumper, slider)
+    {
+        var jump_dist = jumper.current_slot - slider.current_slot;
+        if (this.bump_method == QUEUE_SWAP)
+        {
+            if (!slider.ok_to_bump)
+                return false;
+//console.log('swap ---------------------------');
+//console.log(jumper);
+//console.log(slider);
+            jumper.amount_spent += jump_dist * this.bump_price;
+            slider.amount_received += jump_dist * this.bump_price;
+            jumper.current_slot -= jump_dist;
+            slider.current_slot += jump_dist;
+//console.log('slot[' + jumper.current_slot + '] = ' + jumper.original_slot);
+//console.log(' slot[' + slider.current_slot + '] = ' + slider.original_slot);
+            this.appointment_slots[jumper.current_slot] = jumper.original_slot;
+            this.appointment_slots[slider.current_slot] = slider.original_slot;
+            return true;
+        }
+        else
+        {
+            // TODO: revise this if we use max bump distances
+            if (!slider.ok_to_bump)
+                return false;
+            var bump_slot_list = []
+            var bump_person_list = []
+            for (var slot = slider.current_slot; slot < jumper.current_slot; ++slot)
+            {
+                var person = this.people[this.appointment_slots[slot]];
+                if (person.ok_to_bump)
+                {
+                    bump_slot_list.push(slot);
+                    bump_person_list.push(person);
+                }
+            }
+            bump_slot_list.push(jumper.current_slot);
+            bump_person_list.push(jumper);
+//console.log(bump_slot_list);
+            for (var i = 0; i < bump_slot_list.length - 1; ++i)
+            {
+                var person = bump_person_list[i];
+                var old_slot = bump_slot_list[i];
+                var new_slot = bump_slot_list[i + 1];
+                person.current_slot = new_slot;
+                this.appointment_slots[new_slot] = person.original_slot;
+                if (this.bump_method == QUEUE_SHIFT)
+                    person.amount_received += (new_slot - old_slot) * this.bump_price;
+            }
+            jumper.amount_spent += jump_dist * this.bump_price;
+            jumper.current_slot = bump_slot_list[0];
+            this.appointment_slots[bump_slot_list[0]] = jumper.original_slot;
+            if (this.bump_method == QUEUE_SHIFT_SHARE)
+            {
+                var number_of_bumpees = 0;
+                for (var i = 0; i < this.people.length; ++i)
+                {
+                    if (this.people[i].ok_to_bump)
+                        number_of_bumpees++;
+                }
+                var amount = jump_dist * this.bump_price / number_of_bumpees;
+                for (var i = 0; i < this.people.length; ++i)
+                {
+                    if (this.people[i].ok_to_bump)
+                        this.people[i].amount_received += amount;
+                }
+            }
+            return true;
+        }
+    }
+
     this.print_to_html_table = function()
     {
         var out_str = '';
@@ -74,9 +176,12 @@ function Cohort(number_of_doses, doses_per_day, bump_price, bump_method)
         out_str += '<tr>';
         out_str += '<td>' + 'before' + '</td>';
         out_str += '<td>' + 'after' + '</td>';
+        out_str += '<td>' + '+/- days' + '</td>';
         out_str += '<td>' + 'date' + '</td>';
         out_str += '<td>' + 'name' + '</td>';
         out_str += '<td>' + 'savings' + '</td>';
+        out_str += '<td>' + 'spent' + '</td>';
+        out_str += '<td>' + 'received' + '</td>';
         out_str += '</tr>\n';
         for (var slot = 0; slot < this.appointment_slots.length; ++slot)
         {
@@ -84,9 +189,18 @@ function Cohort(number_of_doses, doses_per_day, bump_price, bump_method)
             var person = this.people[this.appointment_slots[slot]];
             out_str += '<td>' + (person.original_slot + 1) + '</td>';
             out_str += '<td>' + (slot + 1) + '</td>';
+            if (this.slot_day_indices[person.original_slot] == this.slot_day_indices[person.current_slot])
+                out_str += '<td>' + '-' + '</td>';
+            else
+                out_str += '<td>' + (this.slot_day_indices[person.original_slot] - this.slot_day_indices[person.current_slot]) + '</td>';
             out_str += '<td>' + date_to_string(this.slot_dates[slot]) + '</td>';
             out_str += '<td>' + person.name + '</td>';
             out_str += '<td>$' + person.total_available_cash_savings + '</td>';
+            out_str += '<td>$' + person.amount_spent + '</td>';
+            if (person.ok_to_bump)
+                out_str += '<td>$' + person.amount_received.toFixed(2) + '</td>';
+            else
+                out_str += '<td>' + '-' + '</td>';
             out_str += '</tr>\n';
         }
         out_str += '<table>\n';
@@ -186,18 +300,17 @@ function run_simulations()
     var number_of_doses = parseInt(document.getElementById('total_doses_input').value);
     var doses_per_day   = parseInt(document.getElementById('doses_per_day_input').value);
     var bump_price      = parseFloat(document.getElementById('bump_price_input').value);
-    var bump_method = 0;
+    var bump_method = QUEUE_SHIFT;
     if (document.getElementById('check_slide_share_input').checked)
-        bump_method = 1;
+        bump_method = QUEUE_SHIFT_SHARE;
     if (document.getElementById('check_swap_input').checked)
-        bump_method = 2;
+        bump_method = QUEUE_SWAP;
     brag_box.innerHTML = 'Running ' + num_sims + ' simulations for ' + number_of_doses + ' people...';
     summary_span.innerHTML = '';
     var start_time = new Date();
     for (var sim_index = 0; sim_index < num_sims; ++sim_index)
     {
         var cohort = new Cohort(number_of_doses, doses_per_day, bump_price, bump_method);
-        cohort.let_people_choose();
         cohort.let_people_choose();
         most_recent_cohort = cohort;
     }
