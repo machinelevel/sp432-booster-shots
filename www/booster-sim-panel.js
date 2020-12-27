@@ -252,6 +252,7 @@ function MultiRunData()
     this.initialize = function(cohort)
     {
         this.initialized = true;
+        this.bump_method = cohort.bump_method;
         this.bump_price = cohort.bump_price;
         this.num_slots = cohort.number_of_doses;
         this.num_slots_per_day = cohort.doses_per_day;
@@ -297,8 +298,11 @@ function MultiRunData()
 
     this.print_html_info_to_string = function()
     {
+        var total_people = this.total_cohorts * this.num_slots;
         var max_jump = 0;
         var max_flex = 0;
+        var min_nz_jump = 0;
+        var min_nz_flex = 0;
         var jump_power = 0;
         var flex_power = 0;
         var avg_nz_jump = 0;
@@ -318,19 +322,46 @@ function MultiRunData()
             jump_power += i * jumpers;
             flex_power += i * flexers;
             if (jumpers)
+            {
                 max_jump = i;
+                if (min_nz_jump == 0)
+                    min_nz_jump = i;
+            }
             if (flexers)
+            {
                 max_flex = i;
+                if (min_nz_flex == 0)
+                    min_nz_flex = i;
+            }
         }
 // console.log('flex_power' + flex_power);
 // console.log('num_nz_flexers' + num_nz_flexers);
+// console.log('num_flexers' + num_flexers);
 // console.log('this.bump_price' + this.bump_price);
 
         var sstr = '';
+        sstr += '<b>' + (100 * num_jumpers / total_people).toFixed(0) + '%</b> of all participants chose to pay for an earlier vaccination.<br/>'
+        sstr += 'Of those, <b>' + (100 * num_nz_jumpers / num_jumpers).toFixed(0) + '%</b> were able to.<br/>'
         sstr += 'Average payment made: $' + (jump_power * this.bump_price / num_nz_jumpers).toFixed(0) + '<br/>';
         sstr += 'Max payment made: $' + (max_jump * this.bump_price).toFixed(0) + '<br/>';
-        sstr += 'Average payment received: $' + (flex_power * this.bump_price / num_nz_flexers).toFixed(0) + '<br/>';
-        sstr += 'Max payment received: $' + (max_flex * this.bump_price).toFixed(0) + '<br/>';
+        sstr += 'Average days earlier: ' + (jump_power / (this.num_slots_per_day * num_nz_jumpers)).toFixed(0) + '<br/>';
+        sstr += 'Max days earlier: ' + (max_jump / this.num_slots_per_day).toFixed(0) + '<br/>';
+        sstr += '<br/>'
+        sstr += '<b>' + (100 * num_flexers / total_people).toFixed(0) + '%</b> of all participants chose to let others go first, and possibly receive a check.<br/>'
+        if (this.bump_method == QUEUE_SHIFT_SHARE)
+        {
+            sstr += 'Everyone who did this received a check for <b>$' + (flex_power * this.bump_price / num_flexers).toFixed(0) + '</b> when they got vaccinated.<br/>';
+        }
+        else
+        {
+            sstr += 'Of those, <b>' + (100 * num_nz_flexers / num_flexers).toFixed(3) + '%</b> received a check.<br/>'
+            sstr += 'Average check: $' + (flex_power * this.bump_price / num_nz_flexers).toFixed(0) + '<br/>';
+            sstr += 'Biggest check: $' + (max_flex * this.bump_price).toFixed(0) + '<br/>';
+            sstr += 'Smallest check: $' + (min_nz_flex * this.bump_price).toFixed(0) + '<br/>';
+            sstr += 'Shared check: $' + (flex_power * this.bump_price / num_flexers).toFixed(0) + '<br/>';
+        }
+        sstr += 'No one was delayed more than <b>' + (max_flex / this.num_slots_per_day).toFixed(0) + ' days</b><br/>';
+        sstr += 'Average delay: ' + (flex_power / (num_flexers * this.num_slots_per_day)).toFixed(0) + ' days<br/>';
         return sstr;
     }
 
@@ -361,7 +392,7 @@ function MultiRunData()
         var graph_mid = 0.5 * view_width;
         var graph_width = graph_right - graph_left;
         var graph_height = graph_bot - graph_top;
-        var axle_width = 0.005 * graph_width;
+        var axle_width = 0.002 * graph_width;
         var day_height = graph_height / (this.num_days + 1);
         var day_thick = 0.5 * day_height;
 
@@ -371,6 +402,8 @@ function MultiRunData()
 // console.log('this.jump_days_histogram: ' + this.jump_days_histogram);
 // console.log('Math.max(...this.jump_days_histogram): ' + Math.max(...this.jump_days_histogram));
 
+        // draw the axle
+        sstr += svg_box(graph_mid - 0.5 * axle_width, graph_top, axle_width, graph_height, '#888');
         for (var i = 0; i < this.num_days; ++i)
         {
             var day = this.num_days - i - 1;
@@ -383,8 +416,6 @@ function MultiRunData()
             x = graph_mid;
             sstr += svg_box(x, y, w, h, flex_color);
         }
-        // draw the axle
-        sstr += svg_box(graph_mid - 0.5 * axle_width, graph_top, axle_width, graph_height, 'black');
 
         sstr += "</g>\n";
         sstr += "</svg>\n";
@@ -524,10 +555,10 @@ function run_simulations()
     }
     var elapsed_time = (new Date() - start_time) / 1000.00;
     brag_box.innerHTML = 'Finished ' + num_sims + ' sims with ' + number_of_doses + ' people in ' + elapsed_time.toFixed(3) + ' seconds.';
-    summary_span.innerHTML = most_recent_cohort.print_to_html_table();
+//    summary_span.innerHTML = most_recent_cohort.print_to_html_table();
     multi_graph_span.innerHTML = multi_run_data.print_svg_to_string();
     multi_info_span.innerHTML = multi_run_data.print_html_info_to_string();
-    multi_csv_span.innerHTML = multi_run_data.print_csv_to_string();
+//    multi_csv_span.innerHTML = multi_run_data.print_csv_to_string();
 }
 
 function do_when_page_loaded()
