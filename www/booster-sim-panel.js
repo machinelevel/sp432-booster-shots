@@ -3,12 +3,14 @@
 // There are no warranties, expressed or implied, except that
 // I can personally guarantee that this code has bugs.
 
-// TODO:
-// "swap" vs. "shift" vs. "shift and share"
-// Indicate how many days in the cohort
-// quick-graph at each setting
-// graph "of people who asked for payment" histogram. And "of people who wanted to go early"
-// speed-test shuffled index lists with typed arrays
+// Completion list:
+// 1. Indicate how many days in the cohort
+// (DONE) 2. 100x speedup with bump lists (currently 2.5 sec)
+// 3. Display results in a nice panel
+// 4. click do download complete CSV
+// 5. click to see cohort details
+// 6. quick-graph at each setting?
+// 7. speed-test shuffled index lists with typed arrays
 
 var most_recent_cohort = null;
 
@@ -16,6 +18,7 @@ var QUEUE_SHIFT       = 0;
 var QUEUE_SHIFT_SHARE = 1;
 var QUEUE_SWAP        = 2;
 
+// Each Person occupies one vaccination slot in a Cohort.
 function Person(original_slot)
 {
     this.original_slot = original_slot;
@@ -23,6 +26,7 @@ function Person(original_slot)
     this.amount_spent = 0;
     this.amount_received = 0;
 
+    // Give this person a name, and some money, and some prefernces
     this.set_identity = function()
     {
         var initials = 'ABCDEFGHIJKLMNPQRSTUVWXYZ';
@@ -30,53 +34,69 @@ function Person(original_slot)
         var lastname_index = int_in_range_inclusive(0, initials.length - 1);
         this.name = list_of_names[firstname_index] + ' ' + initials[lastname_index];
         this.total_available_cash_savings = make_random_savings(); // How much money the person could possibly spend
-    }
-
-    this.take_survey = function()
-    {
-        this.i_want_the_vaccine_sooner = Math.random(); // 1.0 = "want it ASAP" and 0.0 = "don't care when."
-        this.i_want_extra_money = Math.random(); // 1.0 = "I'm dangerously broke" and 0.0 = "I'm fine for money."
-        this.min_days_to_jump = 2;
         this.choose_to_flex = false;
         this.choose_to_jump = false;
+        this.i_want_the_vaccine_sooner = Math.random(); // 1.0 = "want it ASAP" and 0.0 = "don't care when."
+        this.i_want_extra_money = Math.random(); // 1.0 = "I'm dangerously broke" and 0.0 = "I'm fine for money."
+    }
 
+    // Ask this person if they want to be flexible.
+    this.ask_about_flex = function()
+    {
         if (this.i_want_extra_money > this.i_want_the_vaccine_sooner)
         {
             if (this.i_want_extra_money > 0.25) // check the "bump me" box
                 this.choose_to_flex = true;
         }
-        else
-        {
-            this.minimum_days_to_jump = 2;
-            var percent_of_my_savings_im_willing_to_spend = 20 * this.i_want_the_vaccine_sooner;
-            this.amount_im_willing_to_spend = this.total_available_cash_savings * 0.01 * percent_of_my_savings_im_willing_to_spend;
-        }
     }
 
-    this.make_a_choice = function(cohort)
+    // Let this person shop for an earlier vaccination date.
+    this.ask_about_jump = function(cohort)
     {
+        if (this.choose_to_flex)
+            return;
         if (this.i_want_the_vaccine_sooner > this.i_want_extra_money)
         {
-//console.log('at 59 ' + this.min_days_to_jump);
-            // shop for a bump-ahead
+            this.minimum_days_to_jump = 2;  // I won't pay to jump less than this many days.
+            var percent_of_my_savings_im_willing_to_spend = 20 * this.i_want_the_vaccine_sooner;
+            this.amount_im_willing_to_spend = this.total_available_cash_savings * 0.01 * percent_of_my_savings_im_willing_to_spend;
             var budget = this.amount_im_willing_to_spend - this.amount_spent;
+
+            // Given my budget, how many slots could I jump ahead?
             var max_slots_i_can_jump = Math.floor(this.amount_im_willing_to_spend / cohort.bump_price);
             if (max_slots_i_can_jump > this.current_slot)
                 max_slots_i_can_jump = this.current_slot;
-            if (max_slots_i_can_jump >= this.min_days_to_jump * cohort.doses_per_day)
-                this.choose_to_jump = true;
-            if (this.choose_to_jump)
+            if (max_slots_i_can_jump >= this.minimum_days_to_jump * cohort.doses_per_day)
             {
-                var start_slot = this.current_slot - max_slots_i_can_jump;
-                for (var slot = start_slot; slot < this.current_slot; ++slot)
+                // I can afford to jump ahead by some good amount, so give it a shot.
+                this.choose_to_jump = true;
+                var link = this.bump_link;
+                var min_slot = this.current_slot - max_slots_i_can_jump;
+                // find the first flex with an earlier slot
+                while (link != null && link.current_slot > this.current_slot)
+                    link = link.bump_link;
+                // Now go shopping!
+                if (cohort.bump_method == QUEUE_SWAP)
                 {
-    //console.log('try1 ' + this.current_slot + ' -> ' + slot);
-                    var other = cohort.people[cohort.appointment_slots[slot]];
-                    if ((cohort.slot_day_indices[this.current_slot] - cohort.slot_day_indices[slot]) >= this.min_days_to_jump)
+                    if (link != null && link.current_slot >= min_slot)
                     {
-    //console.log('try ' + this.current_slot + ' -> ' + slot);
-                        if (cohort.try_to_jump(this, other))
-                            break;
+                        while (link.bump_link != null && link.bump_link.current_slot >= min_slot)
+                            link = link.bump_link;
+                        var link_slot = link.current_slot;
+                        link.current_slot = this.current_slot;
+                        this.current_slot = link_slot;
+                        link = link.bump_link;
+                    }
+                }
+                else
+                {
+                    // Now climb the chain until it gets too pricey.
+                    while (link != null && link.current_slot >= min_slot)
+                    {
+                        var link_slot = link.current_slot;
+                        link.current_slot = this.current_slot;
+                        this.current_slot = link_slot;
+                        link = link.bump_link;
                     }
                 }
             }
@@ -84,9 +104,10 @@ function Person(original_slot)
     }
 
     this.set_identity();
-    this.take_survey();
 }
 
+// A Cohort is a group of people signed up for vaccination.
+// Within a Cohort, the initial order is arbitrary.
 function Cohort(number_of_doses, doses_per_day, bump_price, bump_method)
 {
     this.number_of_doses = number_of_doses;
@@ -100,8 +121,9 @@ function Cohort(number_of_doses, doses_per_day, bump_price, bump_method)
     this.slot_dates = []
     for (var slot = 0; slot < this.number_of_doses; ++slot)
     {
-        this.people.push(new Person(slot));
-        this.appointment_slots.push(slot);
+        var person = new Person(slot);
+        this.people.push(person);
+        this.appointment_slots.push(person);
 
         var slot_day_index = Math.floor(slot / this.doses_per_day);
         var slot_date = date = new Date(this.first_dose_date);
@@ -112,79 +134,41 @@ function Cohort(number_of_doses, doses_per_day, bump_price, bump_method)
 
     this.let_people_choose = function()
     {
-        var shuffle = make_shuffle(this.number_of_doses);
+        for (var i = 0; i < this.people.length; ++i)
+            this.people[i].ask_about_flex();
+        this.make_bump_chain();
+
+        var shuffle = make_shuffle(this.people.length);
         for (var i = 0; i < shuffle.length; ++i)
-            this.people[shuffle[i]].make_a_choice(this);
+            this.people[shuffle[i]].ask_about_jump(this);
+        this.finish();
     }
 
-    this.try_to_jump = function(jumper, slider)
+    this.finish = function()
     {
-        var jump_dist = jumper.current_slot - slider.current_slot;
-        if (this.bump_method == QUEUE_SWAP)
+        for (var i = 0; i < this.people.length; ++i)
         {
-            if (!slider.choose_to_flex)
-                return false;
-//console.log('swap ---------------------------');
-//console.log(jumper);
-//console.log(slider);
-            jumper.amount_spent += jump_dist * this.bump_price;
-            slider.amount_received += jump_dist * this.bump_price;
-            jumper.current_slot -= jump_dist;
-            slider.current_slot += jump_dist;
-//console.log('slot[' + jumper.current_slot + '] = ' + jumper.original_slot);
-//console.log(' slot[' + slider.current_slot + '] = ' + slider.original_slot);
-            this.appointment_slots[jumper.current_slot] = jumper.original_slot;
-            this.appointment_slots[slider.current_slot] = slider.original_slot;
-            return true;
+            var person = this.people[i];
+            this.appointment_slots[person.current_slot] = person;
+            var jump = person.original_slot - person.current_slot;
+            if (jump > 0)
+                person.amount_spent = jump * this.bump_price;
+            else
+                person.amount_received = -jump * this.bump_price;
         }
-        else
+    }
+
+    this.make_bump_chain = function()
+    {
+        // Everyone's bump_link points to the previous flexible person
+        // bump_chain is the start of the list.
+        this.bump_chain = null;
+        for (var i = 0; i < this.people.length; ++i)
         {
-            // TODO: revise this if we use max bump distances
-            if (!slider.choose_to_flex)
-                return false;
-            var bump_slot_list = []
-            var bump_person_list = []
-            for (var slot = slider.current_slot; slot < jumper.current_slot; ++slot)
-            {
-                var person = this.people[this.appointment_slots[slot]];
-                if (person.choose_to_flex)
-                {
-                    bump_slot_list.push(slot);
-                    bump_person_list.push(person);
-                }
-            }
-            bump_slot_list.push(jumper.current_slot);
-            bump_person_list.push(jumper);
-//console.log(bump_slot_list);
-            for (var i = 0; i < bump_slot_list.length - 1; ++i)
-            {
-                var person = bump_person_list[i];
-                var old_slot = bump_slot_list[i];
-                var new_slot = bump_slot_list[i + 1];
-                person.current_slot = new_slot;
-                this.appointment_slots[new_slot] = person.original_slot;
-                if (this.bump_method == QUEUE_SHIFT)
-                    person.amount_received += (new_slot - old_slot) * this.bump_price;
-            }
-            jumper.amount_spent += jump_dist * this.bump_price;
-            jumper.current_slot = bump_slot_list[0];
-            this.appointment_slots[bump_slot_list[0]] = jumper.original_slot;
-            if (this.bump_method == QUEUE_SHIFT_SHARE)
-            {
-                var number_of_bumpees = 0;
-                for (var i = 0; i < this.people.length; ++i)
-                {
-                    if (this.people[i].choose_to_flex)
-                        number_of_bumpees++;
-                }
-                var amount = jump_dist * this.bump_price / number_of_bumpees;
-                for (var i = 0; i < this.people.length; ++i)
-                {
-                    if (this.people[i].choose_to_flex)
-                        this.people[i].amount_received += amount;
-                }
-            }
-            return true;
+            var person = this.people[i];
+            person.bump_link = this.bump_chain;
+            if (person.choose_to_flex)
+                this.bump_chain = person;
         }
     }
 
@@ -205,7 +189,7 @@ function Cohort(number_of_doses, doses_per_day, bump_price, bump_method)
         for (var slot = 0; slot < this.appointment_slots.length; ++slot)
         {
             out_str += '<tr>';
-            var person = this.people[this.appointment_slots[slot]];
+            var person = this.appointment_slots[slot];
             out_str += '<td>' + (person.original_slot + 1) + '</td>';
             out_str += '<td>' + (slot + 1) + '</td>';
             if (person.choose_to_jump || person.choose_to_flex)
@@ -234,7 +218,7 @@ function Cohort(number_of_doses, doses_per_day, bump_price, bump_method)
         var out_str = '';
         for (var slot = 0; slot < this.appointment_slots.length; ++slot)
         {
-            var person = this.people[this.appointment_slots[slot]];
+            var person = this.appointment_slots[slot];
             out_str += (person.original_slot + 1) + ', ';
             out_str += (slot + 1) + ', ';
             out_str += date_to_string(this.slot_dates[slot]) + ', ';
@@ -245,6 +229,8 @@ function Cohort(number_of_doses, doses_per_day, bump_price, bump_method)
     }
 }
 
+// MultiRunData is the collector, averager, and reporter
+// used to combine the results of 1 or more Cohorts.
 function MultiRunData()
 {
     this.initialized = false;
@@ -334,10 +320,6 @@ function MultiRunData()
                     min_nz_flex = i;
             }
         }
-// console.log('flex_power' + flex_power);
-// console.log('num_nz_flexers' + num_nz_flexers);
-// console.log('num_flexers' + num_flexers);
-// console.log('this.bump_price' + this.bump_price);
 
         var sstr = '';
         sstr += '<b>' + (100 * num_jumpers / total_people).toFixed(0) + '%</b> of all participants chose to pay for an earlier vaccination.<br/>'
@@ -358,7 +340,6 @@ function MultiRunData()
             sstr += 'Average check: $' + (flex_power * this.bump_price / num_nz_flexers).toFixed(0) + '<br/>';
             sstr += 'Biggest check: $' + (max_flex * this.bump_price).toFixed(0) + '<br/>';
             sstr += 'Smallest check: $' + (min_nz_flex * this.bump_price).toFixed(0) + '<br/>';
-            sstr += 'Shared check: $' + (flex_power * this.bump_price / num_flexers).toFixed(0) + '<br/>';
         }
         sstr += 'No one was delayed more than <b>' + (max_flex / this.num_slots_per_day).toFixed(0) + ' days</b><br/>';
         sstr += 'Average delay: ' + (flex_power / (num_flexers * this.num_slots_per_day)).toFixed(0) + ' days<br/>';
@@ -398,9 +379,6 @@ function MultiRunData()
 
         var jump_scale = 0.55 * graph_width / max_jump_flex;
         var flex_scale = 0.55 * graph_width / max_jump_flex;
-
-// console.log('this.jump_days_histogram: ' + this.jump_days_histogram);
-// console.log('Math.max(...this.jump_days_histogram): ' + Math.max(...this.jump_days_histogram));
 
         // draw the axle
         sstr += svg_box(graph_mid - 0.5 * axle_width, graph_top, axle_width, graph_height, '#888');
