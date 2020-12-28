@@ -4,7 +4,7 @@
 // I can personally guarantee that this code has bugs.
 
 // Completion list:
-// 1. Indicate how many days in the cohort
+// (DONE) 1. Indicate how many days in the cohort
 // (DONE) 2. 100x speedup with bump lists (currently 2.5 sec)
 // 3. Display results in a nice panel
 // 4. click do download complete CSV
@@ -539,8 +539,24 @@ function run_simulations()
 //    multi_csv_span.innerHTML = multi_run_data.print_csv_to_string();
 }
 
+function update_cohort_duration()
+{
+    var number_of_doses  = parseInt(document.getElementById('total_doses_input').value);
+    var doses_per_day    = parseInt(document.getElementById('doses_per_day_input').value);
+    var duration_span = document.getElementById('cohort_duration_span');
+    var total_days = Math.ceil(number_of_doses / doses_per_day);
+    sstr = '(Vaccination will take ' + total_days + ' days';
+    if (total_days > 365.25)
+        sstr += ', so about ' + (total_days / 365.25).toFixed(1) + ' years';
+    else if (total_days > 30.5)
+        sstr += ', so about ' + (total_days / 30.5).toFixed(1) + ' months';
+    sstr += '.)';
+    duration_span.innerHTML = sstr;
+}
+
 function do_when_page_loaded()
 {
+    update_cohort_duration();
 }
 document.onload = do_when_page_loaded();
 

@@ -7,15 +7,16 @@
         <b>Clinic info</b>
         <br/>
         <label for="total_doses_input">Total doses:</label>
-        <input type="number" id="total_doses_input" style="width: 7em;" value="23000" />
+        <input type="number" id="total_doses_input" style="width: 7em;" value="23000" onchange="update_cohort_duration();" />
         <br/>
         <label for="doses_per_day_input">Doses per day:</label>
-        <input type="number" id="doses_per_day_input" style="width: 4em;" value="384" />
+        <input type="number" id="doses_per_day_input" style="width: 4em;" value="384" onchange="update_cohort_duration();" />
+        <span id="cohort_duration_span"></span>
         <hr/>
         <b>Sim settings</b>
         <br/>
         <label for="bump_price_input">Bump cost: $</label>
-        <input type="number" id="bump_price_input" style="width: 6em;" min="0.00" step="0.50" max="500.00" value="0.50" onchange="enforce_currency_number(this);" />
+        <input type="number" id="bump_price_input" style="width: 6em;" min="0.00" step="0.50" max="500.00" value="1.00" onchange="enforce_currency_number(this);" />
         <br/>
         <input type="radio" name="queue_method" id="check_slide_input" />
         <label for="check_slide_input">Slide</label>
