@@ -836,7 +836,10 @@ function run_simulations()
         bump_method = QUEUE_SHIFT;
     if (check_swap && check_swap.checked)
         bump_method = QUEUE_SWAP;
-    brag_box.innerHTML = 'Running ' + num_sims + ' simulations for ' + number_of_doses + ' people...';
+    if (num_sims == 1)
+        brag_box.innerHTML = 'Running a sim with ' + number_of_doses + ' people...';
+    else
+        brag_box.innerHTML = 'Averaging ' + num_sims + ' sims with ' + number_of_doses + ' people...';
     var multi_run_data = new MultiRunData();
     var most_recent_cohort = null;
     var start_time = new Date();
@@ -848,7 +851,10 @@ function run_simulations()
         most_recent_cohort = cohort;
     }
     var elapsed_time = (new Date() - start_time) / 1000.00;
-    brag_box.innerHTML = 'Finished ' + num_sims + ' sims with ' + number_of_doses + ' people in ' + elapsed_time.toFixed(3) + ' seconds.';
+    if (num_sims == 1)
+        brag_box.innerHTML = 'Finished sim with ' + number_of_doses + ' people in ' + elapsed_time.toFixed(3) + ' seconds.';
+    else
+        brag_box.innerHTML = 'Finished ' + num_sims + ' sims with ' + number_of_doses + ' people in ' + elapsed_time.toFixed(3) + ' seconds.';
     multi_graph_span.innerHTML = multi_run_data.print_svg_to_string_v2();
     most_recent_csv_results = multi_run_data.print_csv_to_string(most_recent_cohort);
 }
