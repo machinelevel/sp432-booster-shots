@@ -12,8 +12,6 @@
 // 6. quick-graph at each setting?
 // 7. speed-test shuffled index lists with typed arrays
 
-var most_recent_cohort = null;
-
 var QUEUE_SHIFT       = 0;
 var QUEUE_SHIFT_SHARE = 1;
 var QUEUE_SWAP        = 2;
@@ -156,6 +154,28 @@ function Cohort(number_of_doses, doses_per_day, bump_price, bump_method)
             else
                 person.amount_received = -jump * this.bump_price;
         }
+        if (this.bump_method == QUEUE_SHIFT_SHARE)
+        {
+            var total_spent = 0;
+            var num_flexers = 0;
+            for (var i = 0; i < this.people.length; ++i)
+            {
+                var person = this.people[i];
+                total_spent += person.amount_spent;
+                if (person.choose_to_flex)
+                    num_flexers++;
+            }
+            if (num_flexers > 0)
+            {
+                var flex_payment = total_spent / num_flexers;
+                for (var i = 0; i < this.people.length; ++i)
+                {
+                    var person = this.people[i];
+                    if (person.choose_to_flex)
+                        person.amount_received = flex_payment;
+                }
+            }
+        }
     }
 
     this.make_bump_chain = function()
@@ -172,57 +192,75 @@ function Cohort(number_of_doses, doses_per_day, bump_price, bump_method)
         }
     }
 
-    this.print_to_html_table = function()
-    {
-        var out_str = '';
-        out_str += '<table>\n';
-        out_str += '<tr>';
-        out_str += '<td>' + 'before' + '</td>';
-        out_str += '<td>' + 'after' + '</td>';
-        out_str += '<td>' + '+/- days' + '</td>';
-        out_str += '<td>' + 'date' + '</td>';
-        out_str += '<td>' + 'name' + '</td>';
-        out_str += '<td>' + 'budget' + '</td>';
-        out_str += '<td>' + 'spent' + '</td>';
-        out_str += '<td>' + 'received' + '</td>';
-        out_str += '</tr>\n';
-        for (var slot = 0; slot < this.appointment_slots.length; ++slot)
-        {
-            out_str += '<tr>';
-            var person = this.appointment_slots[slot];
-            out_str += '<td>' + (person.original_slot + 1) + '</td>';
-            out_str += '<td>' + (slot + 1) + '</td>';
-            if (person.choose_to_jump || person.choose_to_flex)
-                out_str += '<td>' + (this.slot_day_indices[person.original_slot] - this.slot_day_indices[person.current_slot]) + '</td>';
-            else
-                out_str += '<td>' + '-' + '</td>';
-            out_str += '<td>' + date_to_string(this.slot_dates[slot]) + '</td>';
-            out_str += '<td>' + person.name + '</td>';
-            if (person.choose_to_jump)
-                out_str += '<td>' + dollar_text(person.amount_im_willing_to_spend) + '</td>';
-            else
-                out_str += '<td>' + '-' + '</td>';
-            out_str += '<td>' + dollar_text(person.amount_spent) + '</td>';
-            if (person.choose_to_flex)
-                out_str += '<td>' + dollar_text(person.amount_received) + '</td>';
-            else
-                out_str += '<td>' + '-' + '</td>';
-            out_str += '</tr>\n';
-        }
-        out_str += '<table>\n';
-        return out_str;
-    }
+    // this.print_to_html_table = function()
+    // {
+    //     var out_str = '';
+    //     out_str += '<table>\n';
+    //     out_str += '<tr>';
+    //     out_str += '<td>' + 'before' + '</td>';
+    //     out_str += '<td>' + 'after' + '</td>';
+    //     out_str += '<td>' + '+/- days' + '</td>';
+    //     out_str += '<td>' + 'date' + '</td>';
+    //     out_str += '<td>' + 'name' + '</td>';
+    //     out_str += '<td>' + 'budget' + '</td>';
+    //     out_str += '<td>' + 'spent' + '</td>';
+    //     out_str += '<td>' + 'received' + '</td>';
+    //     out_str += '</tr>\n';
+    //     for (var slot = 0; slot < this.appointment_slots.length; ++slot)
+    //     {
+    //         out_str += '<tr>';
+    //         var person = this.appointment_slots[slot];
+    //         out_str += '<td>' + (person.original_slot + 1) + '</td>';
+    //         out_str += '<td>' + (slot + 1) + '</td>';
+    //         if (person.choose_to_jump || person.choose_to_flex)
+    //             out_str += '<td>' + (this.slot_day_indices[person.original_slot] - this.slot_day_indices[person.current_slot]) + '</td>';
+    //         else
+    //             out_str += '<td>' + '-' + '</td>';
+    //         out_str += '<td>' + date_to_string(this.slot_dates[slot]) + '</td>';
+    //         out_str += '<td>' + person.name + '</td>';
+    //         if (person.choose_to_jump)
+    //             out_str += '<td>' + dollar_text(person.amount_im_willing_to_spend) + '</td>';
+    //         else
+    //             out_str += '<td>' + '-' + '</td>';
+    //         out_str += '<td>' + dollar_text(person.amount_spent) + '</td>';
+    //         if (person.choose_to_flex)
+    //             out_str += '<td>' + dollar_text(person.amount_received) + '</td>';
+    //         else
+    //             out_str += '<td>' + '-' + '</td>';
+    //         out_str += '</tr>\n';
+    //     }
+    //     out_str += '<table>\n';
+    //     return out_str;
+    // }
 
     this.print_to_csv_string = function()
     {
         var out_str = '';
+        out_str += 'slot,actual-vacc-date,name,day-change,slot-change,money-paid,money-received\n';
         for (var slot = 0; slot < this.appointment_slots.length; ++slot)
         {
             var person = this.appointment_slots[slot];
-            out_str += (person.original_slot + 1) + ', ';
-            out_str += (slot + 1) + ', ';
-            out_str += date_to_string(this.slot_dates[slot]) + ', ';
-            out_str += person.name + ', ';
+            out_str += slot + ',';
+            out_str += date_to_string(this.slot_dates[slot]) + ',';
+            out_str += person.name + ',';
+            if (person.current_slot == person.original_slot)
+            {
+                out_str += ',,';
+            }
+            else
+            {
+                out_str += (this.slot_day_indices[person.original_slot] - this.slot_day_indices[person.current_slot]) + ',';
+                out_str += (person.original_slot - person.current_slot) + ',';
+            }
+            if (person.amount_spent > 0)
+            {
+                out_str += '$' + person.amount_spent;
+            }
+            out_str += ',';
+            if (person.amount_received > 0)
+            {
+                out_str += '$' + person.amount_received;
+            }
             out_str += '\n';
         }
         return out_str;
@@ -282,69 +320,69 @@ function MultiRunData()
         }
     }
 
-    this.print_html_info_to_string = function()
-    {
-        var total_people = this.total_cohorts * this.num_slots;
-        var max_jump = 0;
-        var max_flex = 0;
-        var min_nz_jump = 0;
-        var min_nz_flex = 0;
-        var jump_power = 0;
-        var flex_power = 0;
-        var avg_nz_jump = 0;
-        var avg_nz_flex = 0;
-        var num_nz_jumpers = 0;
-        var num_nz_flexers = 0;
-        var num_jumpers = this.jump_slot_histogram[0];
-        var num_flexers = this.flex_slot_histogram[0];
-        for (var i = 1; i < this.jump_slot_histogram.length; ++i)
-        {
-            var jumpers = this.jump_slot_histogram[i];
-            var flexers = this.flex_slot_histogram[i];
-            num_jumpers += jumpers;
-            num_flexers += flexers;
-            num_nz_jumpers += jumpers;
-            num_nz_flexers += flexers;
-            jump_power += i * jumpers;
-            flex_power += i * flexers;
-            if (jumpers)
-            {
-                max_jump = i;
-                if (min_nz_jump == 0)
-                    min_nz_jump = i;
-            }
-            if (flexers)
-            {
-                max_flex = i;
-                if (min_nz_flex == 0)
-                    min_nz_flex = i;
-            }
-        }
+    // this.print_html_info_to_string = function()
+    // {
+    //     var total_people = this.total_cohorts * this.num_slots;
+    //     var max_jump = 0;
+    //     var max_flex = 0;
+    //     var min_nz_jump = 0;
+    //     var min_nz_flex = 0;
+    //     var jump_power = 0;
+    //     var flex_power = 0;
+    //     var avg_nz_jump = 0;
+    //     var avg_nz_flex = 0;
+    //     var num_nz_jumpers = 0;
+    //     var num_nz_flexers = 0;
+    //     var num_jumpers = this.jump_slot_histogram[0];
+    //     var num_flexers = this.flex_slot_histogram[0];
+    //     for (var i = 1; i < this.jump_slot_histogram.length; ++i)
+    //     {
+    //         var jumpers = this.jump_slot_histogram[i];
+    //         var flexers = this.flex_slot_histogram[i];
+    //         num_jumpers += jumpers;
+    //         num_flexers += flexers;
+    //         num_nz_jumpers += jumpers;
+    //         num_nz_flexers += flexers;
+    //         jump_power += i * jumpers;
+    //         flex_power += i * flexers;
+    //         if (jumpers)
+    //         {
+    //             max_jump = i;
+    //             if (min_nz_jump == 0)
+    //                 min_nz_jump = i;
+    //         }
+    //         if (flexers)
+    //         {
+    //             max_flex = i;
+    //             if (min_nz_flex == 0)
+    //                 min_nz_flex = i;
+    //         }
+    //     }
 
-        var sstr = '';
-        sstr += '<b>' + (100 * num_jumpers / total_people).toFixed(0) + '%</b> of all participants chose to pay for an earlier vaccination.<br/>'
-        sstr += 'Of those, <b>' + (100 * num_nz_jumpers / num_jumpers).toFixed(0) + '%</b> were able to.<br/>'
-        sstr += 'Average payment made: ' + dollar_text(jump_power * this.bump_price / num_nz_jumpers) + '<br/>';
-        sstr += 'Max payment made: ' + dollar_text(max_jump * this.bump_price) + '<br/>';
-        sstr += 'Average days earlier: ' + (jump_power / (this.num_slots_per_day * num_nz_jumpers)).toFixed(0) + '<br/>';
-        sstr += 'Max days earlier: ' + (max_jump / this.num_slots_per_day).toFixed(0) + '<br/>';
-        sstr += '<br/>'
-        sstr += '<b>' + (100 * num_flexers / total_people).toFixed(0) + '%</b> of all participants chose to let others go first, and possibly receive a check.<br/>'
-        if (this.bump_method == QUEUE_SHIFT_SHARE)
-        {
-            sstr += 'Everyone who did this received a check for <b>' + dollar_text(flex_power * this.bump_price / num_flexers) + '</b> when they got vaccinated.<br/>';
-        }
-        else
-        {
-            sstr += 'Of those, <b>' + (100 * num_nz_flexers / num_flexers).toFixed(3) + '%</b> received a check.<br/>'
-            sstr += 'Average check: ' + dollar_text(flex_power * this.bump_price / num_nz_flexers) + '<br/>';
-            sstr += 'Biggest check: ' + dollar_text(max_flex * this.bump_price) + '<br/>';
-            sstr += 'Smallest check: ' + dollar_text(min_nz_flex * this.bump_price) + '<br/>';
-        }
-        sstr += 'No one was delayed more than <b>' + (max_flex / this.num_slots_per_day).toFixed(0) + ' days</b><br/>';
-        sstr += 'Average delay: ' + (flex_power / (num_flexers * this.num_slots_per_day)).toFixed(0) + ' days<br/>';
-        return sstr;
-    }
+    //     var sstr = '';
+    //     sstr += '<b>' + (100 * num_jumpers / total_people).toFixed(0) + '%</b> of all participants chose to pay for an earlier vaccination.<br/>'
+    //     sstr += 'Of those, <b>' + (100 * num_nz_jumpers / num_jumpers).toFixed(0) + '%</b> were able to.<br/>'
+    //     sstr += 'Average payment made: ' + dollar_text(jump_power * this.bump_price / num_nz_jumpers) + '<br/>';
+    //     sstr += 'Max payment made: ' + dollar_text(max_jump * this.bump_price) + '<br/>';
+    //     sstr += 'Average days earlier: ' + (jump_power / (this.num_slots_per_day * num_nz_jumpers)).toFixed(0) + '<br/>';
+    //     sstr += 'Max days earlier: ' + (max_jump / this.num_slots_per_day).toFixed(0) + '<br/>';
+    //     sstr += '<br/>'
+    //     sstr += '<b>' + (100 * num_flexers / total_people).toFixed(0) + '%</b> of all participants chose to let others go first, and possibly receive a check.<br/>'
+    //     if (this.bump_method == QUEUE_SHIFT_SHARE)
+    //     {
+    //         sstr += 'Everyone who did this received a check for <b>' + dollar_text(flex_power * this.bump_price / num_flexers) + '</b> when they got vaccinated.<br/>';
+    //     }
+    //     else
+    //     {
+    //         sstr += 'Of those, <b>' + (100 * num_nz_flexers / num_flexers).toFixed(3) + '%</b> received a check.<br/>'
+    //         sstr += 'Average check: ' + dollar_text(flex_power * this.bump_price / num_nz_flexers) + '<br/>';
+    //         sstr += 'Biggest check: ' + dollar_text(max_flex * this.bump_price) + '<br/>';
+    //         sstr += 'Smallest check: ' + dollar_text(min_nz_flex * this.bump_price) + '<br/>';
+    //     }
+    //     sstr += 'No one was delayed more than <b>' + (max_flex / this.num_slots_per_day).toFixed(0) + ' days</b><br/>';
+    //     sstr += 'Average delay: ' + (flex_power / (num_flexers * this.num_slots_per_day)).toFixed(0) + ' days<br/>';
+    //     return sstr;
+    // }
 
     // this.print_svg_to_string_v1 = function()
     // {
@@ -484,8 +522,8 @@ function MultiRunData()
         var jump_scale = person_scale;
         var flex_scale = person_scale;
         var flex_axle_y = graph_top + max_flex * flex_scale;
-        if (flex_axle_y < 10 * text_size) // make sure there's space for the text
-            flex_axle_y = 10 * text_size;
+        if (flex_axle_y < 10.5 * text_size) // make sure there's space for the text
+            flex_axle_y = 10.5 * text_size;
         var jump_axle_y = flex_axle_y + 2.0 * text_size;
 
         graph_bot = jump_axle_y + max_jump * person_scale;
@@ -516,17 +554,20 @@ function MultiRunData()
         sstr += svg_text('days early →', zero_day_x + 3 * day_scale, flex_axle_y, text_size, text_color, 'start', 'baseline', 'normal');
         sstr += svg_text('← days delayed', graph_left, jump_axle_y, text_size, text_color, 'start', 'hanging', 'normal');
 
-        var msg_x = 0.8 * zero_day_x + 0.2 * graph_right;
+        var fpeeps = Math.round(total_flex_peeps / this.total_cohorts);
+        var jpeeps = Math.round(total_nz_jumpers / this.total_cohorts);
+        var kpeeps = this.num_slots - (fpeeps + jpeeps);
+        var msg_x = zero_day_x + 8 * text_size;
         var msg_y = graph_top;
         var msg_jump0 = ' ' + (100 * total_nz_jumpers / (this.num_slots * this.total_cohorts)).toFixed(2) + '% '
-                        + '(' + comma_text(total_nz_jumpers / this.total_cohorts) + ' people) chose to pay for an earlier date.';
+                        + '(' + comma_text(jpeeps) + ' people) chose to pay for an earlier date.';
         var msg_jump1 = 'Average was ' + dollar_text(total_jump_dollars / total_nz_jumpers) + ' for ' + (total_jump_dollars / (total_nz_jumpers * this.bump_price * this.num_slots_per_day)).toFixed(0) + ' days.';
         var msg_flex0 = ' ' + (100 * total_flex_peeps / (this.num_slots * this.total_cohorts)).toFixed(2) + '% '
-                        + '(' + comma_text(total_flex_peeps / this.total_cohorts) + ' people) chose to be flexible, letting others go ahead.';
+                        + '(' + comma_text(fpeeps) + ' people) chose to be flexible, letting others go ahead.';
         var msg_flex1 = ' Each got a check for ' + dollar_text(flex_payment) + ' at vaccination time.';
         var msg_flex2 = ' No one was delayed more than ' + max_flex_days + ' days.';
         var msg_keep0 = ' ' + (100 * (total_keep_peeps) / (this.num_slots * this.total_cohorts)).toFixed(2) + '% '
-                        + '(' + comma_text(total_keep_peeps / this.total_cohorts) + ' people) chose to keep their original date.';
+                        + '(' + comma_text(kpeeps) + ' people) chose to keep their original date.';
         sstr += svg_text('Get it early:', msg_x - 0.25 * text_size, msg_y, text_size, jump_color, 'end', 'hanging', 'bolder');
         sstr += svg_text(msg_jump0, msg_x, msg_y, text_size, jump_color, 'start', 'hanging', 'normal');
         msg_y += text_size;
@@ -591,7 +632,6 @@ function MultiRunData()
                           + '(' + peep_count + ' ' + txt_peep + ')'
                           + ' received ' + dollar_text(flex_payment)
                           + ' for a delay of ' + i + ' ' + txt_days + '.';
-                    console.log(tooltip);
                 }
                 else
                 {
@@ -633,15 +673,30 @@ function MultiRunData()
         return sstr;
     }
 
-    this.print_csv_to_string = function()
+    this.print_csv_to_string = function(most_recent_cohort)
     {
         var out_str = '';
-        out_str += '\ncount,days\n';
+        out_str += 'SIMULATION RESULTS\n';
+        out_str += 'Number of doses,' + this.num_slots + '\n';
+        out_str += 'Doses per day,' + this.num_slots_per_day + '\n';
+        out_str += 'Number of days,' + this.num_days + '\n';
+        out_str += 'Bump price,$' + this.bump_price + '\n';
+        out_str += 'Number of simulations,' + this.total_cohorts + '\n';
+        out_str += '\n';
+
+        out_str += 'PER-DAY HISTOGRAM\n';
+        out_str += 'days,flexers,jumpers\n';
         for (var i = 0; i < this.num_days; ++i)
-            out_str += '' + this.jump_days_histogram[i] + ',' + i + '\n';
-        out_str += '\ncount,days\n';
-        for (var i = 0; i < this.num_days; ++i)
-            out_str += '' + this.flex_days_histogram[i] + ',' + i + '\n';
+            out_str += '' + i + ',' + this.flex_days_histogram[i] + ',' + this.jump_days_histogram[i] + '\n';
+        out_str += '\n';
+
+        out_str += 'PER-SLOT HISTOGRAM\n';
+        out_str += 'slots,flexers,jumpers,slot-day,jump-price\n';
+        for (var i = 0; i < this.num_slots; ++i)
+            out_str += '' + i + ',' + this.flex_slot_histogram[i] + ',' + this.jump_slot_histogram[i] + ',' + Math.floor(i / this.num_slots_per_day) + ',$' + (i * this.bump_price).toFixed(2) + '\n';
+
+        out_str += 'DETAILS OF ONE COHORT\n';
+        out_str += most_recent_cohort.print_to_csv_string();
         return out_str;
     }
 }
@@ -769,22 +824,21 @@ function enforce_currency_number(box)
 function run_simulations()
 {
     var brag_box         = document.getElementById('brag_box');
-    var summary_span     = document.getElementById('summary_span');
     var multi_graph_span = document.getElementById('multi_graph_span');
-    var multi_info_span  = document.getElementById('multi_info_span');
-    var multi_csv_span   = document.getElementById('multi_csv_span');
     var num_sims         = parseInt(document.getElementById('num_sims_input').value);
     var number_of_doses  = parseInt(document.getElementById('total_doses_input').value);
     var doses_per_day    = parseInt(document.getElementById('doses_per_day_input').value);
     var bump_price       = parseFloat(document.getElementById('bump_price_input').value);
-    var bump_method = QUEUE_SHIFT;
-    if (document.getElementById('check_slide_share_input').checked)
-        bump_method = QUEUE_SHIFT_SHARE;
-    if (document.getElementById('check_swap_input').checked)
+    var check_slide      = document.getElementById('check_slide_input');
+    var check_swap       = document.getElementById('check_swap_input');
+    var bump_method = QUEUE_SHIFT_SHARE;
+    if (check_slide && check_slide.checked)
+        bump_method = QUEUE_SHIFT;
+    if (check_swap && check_swap.checked)
         bump_method = QUEUE_SWAP;
     brag_box.innerHTML = 'Running ' + num_sims + ' simulations for ' + number_of_doses + ' people...';
-    summary_span.innerHTML = '';
     var multi_run_data = new MultiRunData();
+    var most_recent_cohort = null;
     var start_time = new Date();
     for (var sim_index = 0; sim_index < num_sims; ++sim_index)
     {
@@ -795,10 +849,8 @@ function run_simulations()
     }
     var elapsed_time = (new Date() - start_time) / 1000.00;
     brag_box.innerHTML = 'Finished ' + num_sims + ' sims with ' + number_of_doses + ' people in ' + elapsed_time.toFixed(3) + ' seconds.';
-//    summary_span.innerHTML = most_recent_cohort.print_to_html_table();
     multi_graph_span.innerHTML = multi_run_data.print_svg_to_string_v2();
-    multi_info_span.innerHTML = multi_run_data.print_html_info_to_string();
-    multi_csv_span.innerHTML = multi_run_data.print_csv_to_string();
+    most_recent_csv_results = multi_run_data.print_csv_to_string(most_recent_cohort);
 }
 
 function update_cohort_duration()
@@ -814,6 +866,30 @@ function update_cohort_duration()
         sstr += ', so about ' + (total_days / 30.5).toFixed(1) + ' months';
     sstr += '.)';
     duration_span.innerHTML = sstr;
+}
+
+function download_svg()
+{
+    download_text('graph.svg', document.getElementById('multi_graph_span').innerHTML, 'image/svg+xml');
+}
+
+var most_recent_csv_results = '(no results yet)';
+function download_csv()
+{
+    download_text('sim-results.csv', most_recent_csv_results, 'text/csv');
+}
+
+function download_text(filename, text, filetype)
+{
+  console.log(filename);
+  console.log(text);
+  var element = document.createElement('a');
+  element.setAttribute('href', 'data:' + filetype + ';charset=utf-8,' + encodeURIComponent(text));
+  element.setAttribute('download', filename);
+  element.style.display = 'none';
+  document.body.appendChild(element);
+  element.click();
+  document.body.removeChild(element);
 }
 
 function do_when_page_loaded()

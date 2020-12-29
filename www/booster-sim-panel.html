@@ -35,13 +35,13 @@
         <hr/>
         <b>Combined summmary of all runs:</b>
         <br/>
-        <div style="width:100%;">
-            <span id="multi_graph_span"></span>
-        </div>
-        <div style="width:100%;">
-            <span id="multi_info_span"></span>
-        </div>
-<!--         <table>
+        <span id="multi_graph_span"></span>
+        <br/>
+        <input type="button" value="Download graph (SVG)" onclick="download_svg();" />
+        <input type="button" value="Download complete results (CSV)" onclick="download_csv();" />
+<!--         <hr/>
+        <span id="multi_info_span"></span>
+ --><!--         <table>
             <tr>
                 <td>
                 </td>
@@ -52,7 +52,10 @@
         </table>
  -->
         <br/>
-        <pre>
+        <!-- visibility: hidden -->
+<!--         <textarea id="multi_csv_text"></textarea>
+ -->
+<!--          <pre>
         <span id="multi_csv_span"></span>
         </pre>
         <br/>
@@ -62,7 +65,7 @@
         <br/>
         <span id="summary_span"></span>
         <br/>
-
+ -->
 
         <script src="./booster-sim-panel.js"></script>
     </body>
