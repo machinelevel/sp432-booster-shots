@@ -1,3 +1,4 @@
+<meta http-equiv="content-type" content="application/xhtml+xml; charset=utf-8" />
 <html>
     <head>
     </head>
@@ -16,7 +17,7 @@
         <b>Sim settings</b>
         <br/>
         <label for="bump_price_input">Bump cost: $</label>
-        <input type="number" id="bump_price_input" style="width: 6em;" min="0.00" step="0.50" max="500.00" value="1.00" onchange="enforce_currency_number(this);" />
+        <input type="number" id="bump_price_input" style="width: 6em;" min="0.00" step="0.50" max="500.00" value="0.50" onchange="enforce_currency_number(this);" />
         <br/>
         <input type="radio" name="queue_method" id="check_slide_input" />
         <label for="check_slide_input">Slide</label>
@@ -34,10 +35,10 @@
         <hr/>
         <b>Combined summmary of all runs:</b>
         <br/>
-        <div style="width:50%;">
+        <div style="width:100%;">
             <span id="multi_graph_span"></span>
         </div>
-        <div style="width:50%;">
+        <div style="width:100%;">
             <span id="multi_info_span"></span>
         </div>
 <!--         <table>
