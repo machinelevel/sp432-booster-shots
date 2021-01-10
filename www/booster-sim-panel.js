@@ -87,9 +87,14 @@ function Person(original_slot)
                     // Now climb the chain until it gets too pricey.
                     while (link != null && link.current_slot >= min_slot)
                     {
-                        var link_slot = link.current_slot;
-                        link.current_slot = this.current_slot;
-                        this.current_slot = link_slot;
+                        // Only bump this person if doing so keeps them within the safety limit
+                        var delay_days = cohort.slot_day_indices[this.current_slot] - cohort.slot_day_indices[link.original_slot];
+                        if (delay_days <= cohort.max_delay)
+                        {
+                            var link_slot = link.current_slot;
+                            link.current_slot = this.current_slot;
+                            this.current_slot = link_slot;
+                        }
                         link = link.bump_link;
                     }
                 }
