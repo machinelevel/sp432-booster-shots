@@ -39,7 +39,7 @@ function Person(original_slot)
     {
         if (this.i_want_extra_money > this.i_want_the_vaccine_sooner)
         {
-            if (this.i_want_extra_money > 0.25) // check the "bump me" box
+            if (this.i_want_extra_money > 0.25) // check the "i'm flexible" box
                 this.choose_to_flex = true;
         }
     }
@@ -87,9 +87,14 @@ function Person(original_slot)
                     // Now climb the chain until it gets too pricey.
                     while (link != null && link.current_slot >= min_slot)
                     {
-                        var link_slot = link.current_slot;
-                        link.current_slot = this.current_slot;
-                        this.current_slot = link_slot;
+                        // Only bump this person if doing so keeps them within the safety limit
+                        var delay_days = cohort.slot_day_indices[this.current_slot] - cohort.slot_day_indices[link.original_slot];
+                        if (delay_days <= cohort.max_delay)
+                        {
+                            var link_slot = link.current_slot;
+                            link.current_slot = this.current_slot;
+                            this.current_slot = link_slot;
+                        }
                         link = link.bump_link;
                     }
                 }
@@ -102,11 +107,12 @@ function Person(original_slot)
 
 // A Cohort is a group of people signed up for vaccination.
 // Within a Cohort, the initial order is arbitrary.
-function Cohort(number_of_doses, doses_per_day, bump_price, bump_method)
+function Cohort(number_of_doses, doses_per_day, bump_price, max_delay, bump_method)
 {
     this.number_of_doses = number_of_doses;
     this.doses_per_day = doses_per_day;
     this.bump_price = bump_price;
+    this.max_delay = max_delay;
     this.bump_method = bump_method;
     this.first_dose_date = days_after_today(30);
     this.people = []
@@ -233,6 +239,7 @@ function MultiRunData()
         this.initialized = true;
         this.bump_method = cohort.bump_method;
         this.bump_price = cohort.bump_price;
+        this.max_delay = cohort.max_delay;
         this.num_slots = cohort.number_of_doses;
         this.num_slots_per_day = cohort.doses_per_day;
         this.num_days = Math.ceil(this.num_slots / this.num_slots_per_day);
@@ -506,6 +513,7 @@ function MultiRunData()
         out_str += 'Doses per day,' + this.num_slots_per_day + '\n';
         out_str += 'Number of days,' + this.num_days + '\n';
         out_str += 'Bump price,$' + this.bump_price + '\n';
+        out_str += 'Max delay days,' + this.max_delay + '\n';
         out_str += 'Number of simulations,' + this.total_cohorts + '\n';
         out_str += '\n';
 
@@ -654,6 +662,7 @@ function run_simulations()
     var number_of_doses  = parseInt(document.getElementById('total_doses_input').value);
     var doses_per_day    = parseInt(document.getElementById('doses_per_day_input').value);
     var bump_price       = parseFloat(document.getElementById('bump_price_input').value);
+    var max_delay        = parseFloat(document.getElementById('max_delay_input').value);
     var check_slide      = document.getElementById('check_slide_input');
     var check_swap       = document.getElementById('check_swap_input');
     var bump_method = QUEUE_SHIFT_SHARE;
@@ -670,7 +679,7 @@ function run_simulations()
     var start_time = new Date();
     for (var sim_index = 0; sim_index < num_sims; ++sim_index)
     {
-        var cohort = new Cohort(number_of_doses, doses_per_day, bump_price, bump_method);
+        var cohort = new Cohort(number_of_doses, doses_per_day, bump_price, max_delay, bump_method);
         cohort.let_people_choose();
         multi_run_data.accumulate(cohort);
         most_recent_cohort = cohort;
